@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>구매대행 사전 체크 (독일 → 한국)</title>
+<style>
+*{box-sizing:border-box}body{font-family:-apple-system,"Apple SD Gothic Neo",sans-serif;margin:0;background:#f4f5f7;color:#222;word-break:keep-all}
+.w{max-width:880px;margin:0 auto;padding:20px}h1{font-size:22px}h2{font-size:16px;margin:0 0 10px}
+.c{background:#fff;border-radius:12px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px #0001}
+label{display:block;font-size:13px;color:#555;margin:8px 0 3px}input,select,textarea{width:100%;padding:9px;border:1px solid #ccd;border-radius:8px;font-size:14px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:8px;border-bottom:1px solid #eee;text-align:right}th:first-child,td:first-child{text-align:left}
+tr.ok td{background:#e8f6ec;font-weight:700}tr.bad td{color:#b00}
+button{background:#1f6feb;color:#fff;border:0;padding:11px 16px;border-radius:8px;font-size:14px;cursor:pointer}
+.ck label{display:flex;gap:8px;align-items:flex-start;color:#222;font-size:14px;margin:6px 0}.ck input{width:auto;margin-top:3px}
+.tag{display:inline-block;padding:3px 9px;border-radius:99px;font-size:13px;font-weight:700}
+.red{background:#fde2e2;color:#b00}.yel{background:#fff3cd;color:#856404}.grn{background:#d9f2e0;color:#146c2e}
+small{color:#777}pre{white-space:pre-wrap;background:#f7f7f9;padding:10px;border-radius:8px;font-size:13px}
+</style></head><body><div class="w">
+<h1>구매대행 사전 체크 (독일 → 한국)</h1>
+<small>아마존 링크 자동 조회는 이 페이지만으로 불가능합니다. 링크는 Aside에 붙여넣어 실제 가격·성분을 조회하게 하고, 여기서는 계산·체크·요청문 생성을 합니다.</small>
+
+<div class="c"><h2>1. 상품 입력</h2>
+<label>아마존 링크</label><input id="url" placeholder="https://www.amazon.de/dp/XXXXXXXXXX">
+<small id="asin"></small>
+<div class="g"><div><label>상품명</label><input id="name"></div><div><label>Amazon.de 가격 (€)</label><input id="eur" type="number" step="0.01"></div>
+<div><label>무게 (kg, 포장 포함)</label><input id="kg" type="number" step="0.01" value="0.3"></div>
+<div><label>국내 최저가 (원, 네이버/쿠팡 동일모델)</label><input id="dom" type="number"></div>
+<div><label>환율 (원/€) <button type="button" onclick="fx()" style="padding:2px 8px;font-size:12px">현재 환율 불러오기</button></label><input id="fx" type="number" value="1740"><small id="fxs">기본값 1,740 (고정 공식)</small></div>
+<div><label>플랫폼</label><select id="plat"><option value="10.8">스마트스토어 10.8%</option><option value="7.8">쿠팡 7.8%</option></select></div></div></div>
+
+<div class="c"><h2>2. 적정 판매가 (고정 공식)</h2>
+<small>원가 = € × 0.86(VAT환급) × 환율 / 배송비 = (kg × €0.4 + €5) × 환율 / 수수료 = 판매가 × 플랫폼% / 목표 마진 17~22%</small>
+<div id="calc" style="margin-top:10px"></div><div id="dv"></div></div>
+
+<div class="c"><h2>3. 상세페이지 필수 포함 (도이치라움 방식)</h2>
+<pre>- 대표사진 + 브랜드명 굵게 (제품 사진 아래)
+- 상품정보 표(제조사/브랜드/원산지/용량/성분)
+- 이미지 중심 롱디테일, 한 장짜리 JPG 하나로 통합
+- 해외배송안내 카드 이미지 삽입
+- 직구 유의사항 / 관부가세 고객 부담 고지(USD 150 초과)
+- 제품 고유의 구체적 특징 섹션 (신뢰지표만으로 부족)
+- 효능 표현 금지 · 사실 정보(성분·함량)만
+- 가상 리뷰/별점 조작 금지, 실제 공개 데이터만
+- 저장: /Users/doubleb/Downloads/Sourcing/&lt;브랜드명&gt;/ (메인 1000x1000 + 상세)</pre></div>
+
+<div class="c"><h2>4. Aside에 요청하기</h2>
+<button onclick="mk()">요청문 복사</button> <small>복사 후 Aside 채팅에 붙여넣으면 가격 실측·통관 점검·상세페이지 제작을 진행합니다.</small>
+<pre id="out"></pre></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),n=id=>+$(id).value||0,f=x=>Math.round(x).toLocaleString()+'원';
+function calc(){
+ const m=($('url').value.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/)||[])[1];$('asin').textContent=m?'ASIN: '+m:'';
+ const eur=n('eur'),kg=n('kg'),fx=n('fx'),fee=+$('plat').value/100,dom=n('dom');
+ if(!eur){$('calc').innerHTML='<small>가격(€)을 입력하세요</small>';return}
+ const cost=eur*0.86*fx,ship=(kg*0.4+5)*fx,tot=cost+ship;
+ let h=`<table><tr><th>원가</th><td>${f(cost)}</td></tr><tr><th>배송비</th><td>${f(ship)}</td></tr><tr><th>총원가</th><td>${f(tot)}</td></tr></table><br><table><tr><th>목표 마진</th><th>판매가</th><th>마진액</th>${dom?'<th>국내최저가 대비</th>':''}</tr>`;
+ let okAny=false;
+ [0.17,0.20,0.22].forEach(t=>{const p=Math.ceil(tot/(1-fee-t)/100)*100,mg=p-tot-p*fee,cmp=dom?(p<=dom?'cls="ok"':'bad'):'';
+  const cheaper=dom&&p<=dom;if(cheaper)okAny=true;
+  h+=`<tr class="${dom?(cheaper?'ok':'bad'):''}"><td>${t*100}%</td><td>${f(p)}</td><td>${f(mg)}</td>${dom?`<td>${cheaper?'경쟁 가능':'국내가보다 비쌈 ('+f(p-dom)+')'}</td>`:''}</tr>`});
+ $('calc').innerHTML=h+'</table>';
+ $('dv').innerHTML=dom?(okAny?'<p><span class="tag grn">국내가 사전체크 통과 가능</span></p>':'<p><span class="tag red">국내가가 더 싸서 소싱 불가</span> (규칙: 네이버/쿠팡이 더 싸면 하지 않음)</p>'):'<p><span class="tag yel">국내 최저가를 입력해야 판정됩니다</span></p>';
+ if(eur*0.86*fx/1000<1e9&&eur*1.1>130)$('dv').innerHTML+='<small>€130 초과 시 USD 150 초과 가능, 관부가세 고객 부담 고지 필수</small>';
+}
+function mk(){const t=`[구매대행 점검 요청]
+링크: ${$('url').value}
+상품명: ${$('name').value}
+Amazon.de 가격: €${$('eur').value} / 무게 ${$('kg').value}kg / 환율 ${$('fx').value}
+국내 최저가: ${$('dom').value||'미확인(조회 요청)'}원
+요청: 1) 아마존 페이지 실시간 가격·성분 확인 2) 통관·건기식 구매대행 규정 점검 3) 네이버·쿠팡 동일모델 국내가 확인 4) 고정 공식으로 판매가 표 산출 5) 통과 시 도이치라움 방식 상세페이지 제작(메인+상세 JPG 1장)`;
+ $('out').textContent=t;navigator.clipboard&&navigator.clipboard.writeText(t)}
+async function fx(){const s=$('fxs');s.textContent='불러오는 중...';
+ try{const r=await fetch('https://open.er-api.com/v6/latest/EUR');const j=await r.json();const v=j.rates.KRW;
+  $('fx').value=Math.round(v*10)/10;s.textContent='현재 환율 '+v.toFixed(1)+' 원/€ ('+(j.time_last_update_utc||'').slice(0,16)+' 기준, 시장 기준환율이라 실제 카드·송금 환율과 차이 가능)';calc()}
+ catch(e){s.textContent='불러오기 실패. 직접 입력하세요.'}}
+fx();
+document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',()=>{calc()}));calc();
+</script></body></html>
